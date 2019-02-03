@@ -1,6 +1,7 @@
 import time
 
 from snake.environment import Environment
+from snake.extras import Actions, GameState
 
 
 class Game:
@@ -12,17 +13,18 @@ class Game:
         pass
 
     def start(self, crtl):
-        game_state = 'P'
-        while game_state == 'P':
+        gs = GameState.IN_PROGRESS
+        while gs == GameState.IN_PROGRESS:
             t_begin = time.time()
             action = crtl.receive_input()
-            game_state, _ = self.environment.update_state(action)
+            if action != Actions.HALT:
+                gs, _ = self.environment.update_state(action)
             crtl.send_output(board_state=self.environment.state)
             t_end = time.time()
             time.sleep(max(0., 1.0 / self._fps - (t_end - t_begin)))
-        if game_state == 'W':
+        if gs == GameState.WIN:
             self.show_win()
-        elif game_state == 'L':
+        elif gs == GameState.LOSS:
             self.show_lost()
         self.quit()
 

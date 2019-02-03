@@ -1,6 +1,8 @@
 from collections import deque
 from random import choice as rand_choice
 
+from snake.extras import Actions, GameState
+
 
 class Coordinate(object):
     def __init__(self, x, y):
@@ -11,17 +13,13 @@ class Coordinate(object):
     def x(self):
         return self._x
 
-    @x.setter
-    def x(self, new_x):
-        self._x = new_x
-
     @property
     def y(self):
         return self._y
 
-    @y.setter
-    def y(self, new_y):
-        self._y = new_y
+    def __getitem__(self, item):
+        if 0 <= item < 2:
+            return self.x if item == 0 else self.y
 
     def __repr__(self):
         return f"({self.x}, {self.y})"
@@ -52,13 +50,18 @@ class Coordinate(object):
     def __eq__(self, other):
         return self.x == other.x and self.y == other.y
 
+    def __hash__(self):
+        return hash(str(self.x) + str(self.y))
+
 
 def close_bounds(func):
     def call_and_moddiv(self, *args):
         new_obj = func(self, *args)
-        new_obj.x %= self._max_x
-        new_obj.y %= self._max_y
-        return TorusCoordinate(new_obj.x, new_obj.y, self._max_x, self._max_y)
+        return TorusCoordinate(
+            new_obj.x % self._max_x,
+            new_obj.y % self._max_y,
+            self._max_x,
+            self._max_y)
     return call_and_moddiv
 
 
@@ -137,6 +140,13 @@ class Snake:
         for i in range(size - 1):
             self.body.append(init_pos - [0, i])
 
+    def __len__(self):
+        return self.size
+
+    def __iter__(self):
+        for s in self.body:
+            yield s
+
     @property
     def head(self):
         return self.body[-1]
@@ -146,35 +156,35 @@ class Snake:
         return self.body[0]
 
     def move(self, action, grow=False):
-        if action == 'H':
-            return
-        if not grow:
-            tail = self.body.popleft()
-            self.body_wo_head.remove(tail)
-        else:
-            self.size += 1
-        if action == 'U':
-            new_head = self.head + (0, 1)
-        elif action == 'D':
-            new_head = self.head - (0, 1)
-        elif action == 'L':
+        if action == Actions.UP:
             new_head = self.head + (1, 0)
-        elif action == 'R':
+        elif action == Actions.DOWN:
             new_head = self.head - (1, 0)
+        elif action == Actions.LEFT:
+            new_head = self.head - (0, 1)
+        elif action == Actions.RIGHT:
+            new_head = self.head + (0, 1)
         else:
-            raise ValueError(f"Unknown action {action}.")
+            raise ValueError(f"Unknown action code {action}.")
         self.body_wo_head.add(self.head)
         self.body.append(new_head)
+        if not grow:
+            tail = self.body.popleft()
+            if len(self.body_wo_head) > 0:
+                self.body_wo_head.remove(tail)
+        else:
+            self.size += 1
 
     def is_selfbiting(self):
         return self.head in self.body_wo_head
 
 
 class Board(object):
-    def __init__(self, n_rows, n_cols):
+    def __init__(self, n_rows, n_cols, empty_color=(0, 0, 0)):
         self._n_rows = n_rows
         self._n_cols = n_cols
-        self._pixels = [Pixel(TCoord(i, j, n_rows, n_cols), (0, 0, 0))
+        self._empty_color = empty_color
+        self._pixels = [Pixel(TCoord(i, j, n_rows, n_cols), self._empty_color)
                         for i in range(n_rows) for j in range(n_cols)]
 
     @property
@@ -186,21 +196,25 @@ class Board(object):
         return self._n_cols
 
     def set_all(self, col):
-        for p in self:
+        for p in self._pixels:
             p.rgb = col
+
+    def clear(self):
+        self.set_all(self._empty_color)
 
     def __getitem__(self, items):
         if isinstance(items, int):
             if not 0 <= items < self.n_rows * self.n_cols:
                 raise IndexError(f"Pixel index {items} is too large. "
                                  f"Max allowed is {self.n_rows * self.n_cols - 1}")
-            return self._pixels[items]
+            coord = items
         else:
             if not 0 <= items[0] < self.n_rows:
                 raise IndexError(f"Row {items[0]} is out of bounds. Max allowed is {self.n_rows - 1}.")
             if not 0 <= items[1] < self.n_cols:
                 raise IndexError(f"Column {items[1]} is out of bounds. Max allowed is {self.n_cols - 1}.")
-            return self._pixels[items[0] * self.n_cols + items[1]]
+            coord = items[0] * self.n_cols + items[1]
+        return self._pixels[coord]
 
     def __setitem__(self, key, value):
         pixel = self[key]
@@ -208,14 +222,13 @@ class Board(object):
 
     def __iter__(self):
         for p in self._pixels:
-            yield p.rgb
+            yield p
 
 
 class Environment:
     def __init__(self, size):
         if isinstance(size, int):
             size = (size, size)
-        self.world_size = size
         self.snake_size = 1
         self.snake_color = (255, 255, 255)
         self.snake_pos_init = TCoord(size[0], size[1], size[0], size[1]) // 2
@@ -233,8 +246,14 @@ class Environment:
 
         self.reset()
 
+    def _update_board(self):
+        self.board.clear()
+        for s in self.snake:
+            self.board[s] = self.snake_color
+        self.board[self.fruit.position] = self.fruit_color
+
     def get_empty_coords(self):
-        return [p.position for p in self.board if p.rgb == self.empty_color]
+        return [p.coordinate for p in self.board if p.rgb == self.empty_color]
 
     @property
     def state(self):
@@ -246,7 +265,8 @@ class Environment:
         self.snake = Snake(1, self.snake_pos_init)
         self.fruit.respawn(self.get_empty_coords())
         self.fruit_prev_pos = self.fruit.position
-        return 'P', self.score
+        self._update_board()
+        return GameState.IN_PROGRESS, self.score
 
     def update_state(self, action):
         grow_snake = False
@@ -257,10 +277,12 @@ class Environment:
         if self.snake.head == self.fruit.position:
             self.score += 1
             self.fruit.respawn(free_pos=self.get_empty_coords())
+        # set the colors of the snake and the fruit
+        self._update_board()
         # check for a win
         if self.snake.size == self.board.n_cols * self.board.n_rows:
-            return 'W', self.score
+            return GameState.WIN, self.score
         # check for a lost
         if self.snake.is_selfbiting():
-            return 'L', self.score
-        return 'P', self.score
+            return GameState.LOSS, self.score
+        return GameState.IN_PROGRESS, self.score
