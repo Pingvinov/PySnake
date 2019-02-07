@@ -29,13 +29,13 @@ class Controller(object):
 
 
 class KeyboardController(Controller):
-    def __init__(self, keymap=None, buffersize=1, port='COM1'):
+    def __init__(self, keymap=None, buffersize=1, port='COM1', baudrate=9600):
         self._keymap = keymap or {'quit': 'q', 'pause': 'p'}
         self._event_buffer = deque(maxlen=buffersize)
         self._event_handler = tk.Tk()
         self._prev_action = Actions.HALT
         try:
-            self._serial_connection = serial.Serial(port, baudrate=9600, timeout=0.1)
+            self._serial_connection = serial.Serial(port, baudrate=baudrate, timeout=0.1)
         except:
             print("Cannot connect to the board.")
             self._serial_connection = None
@@ -49,7 +49,7 @@ class KeyboardController(Controller):
         elif event.keysym in {'Up', 'Down', 'Left', 'Right'}:
             self._event_buffer.append(getattr(Actions, event.keysym.upper()))
         else:
-            print(f"Undefined action for key {event.keysym}")
+            print("Undefined action for key {}".format(event.keysym))
 
     def start(self):
         self._event_handler.bind_all('<Key>', self._get_key)

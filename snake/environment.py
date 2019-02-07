@@ -22,7 +22,7 @@ class Coordinate(object):
             return self.x if item == 0 else self.y
 
     def __repr__(self):
-        return f"({self.x}, {self.y})"
+        return "({}, {})".format(self.x, self.y)
 
     def __add__(self, other):
         if isinstance(other, int):
@@ -98,7 +98,7 @@ class Pixel(object):
         self._rgb = rgb
 
     def __repr__(self):
-        return f"[{self.coordinate}, RGB: {self.rgb}]"
+        return "[{}, RGB: {}]".format(self.coordinate, self.rgb)
 
     @property
     def coordinate(self):
@@ -111,7 +111,7 @@ class Pixel(object):
     @rgb.setter
     def rgb(self, rgb):
         if not all([0 <= c <= 255 for c in rgb]):
-            raise ValueError(f"Invalid RGB color {rgb}.")
+            raise ValueError("Invalid RGB color {}.".format(rgb))
         self._rgb = rgb
 
 
@@ -165,7 +165,7 @@ class Snake:
         elif action == Actions.RIGHT:
             new_head = self.head + (0, 1)
         else:
-            raise ValueError(f"Unknown action code {action}.")
+            raise ValueError("Unknown action code {}.".format(action))
         self.body_wo_head.add(self.head)
         self.body.append(new_head)
         if not grow:
@@ -205,14 +205,14 @@ class Board(object):
     def __getitem__(self, items):
         if isinstance(items, int):
             if not 0 <= items < self.n_rows * self.n_cols:
-                raise IndexError(f"Pixel index {items} is too large. "
-                                 f"Max allowed is {self.n_rows * self.n_cols - 1}")
+                raise IndexError("Pixel index {items} is too large. "
+                                 "Max allowed is {}".format(items, self.n_rows * self.n_cols - 1))
             coord = items
         else:
             if not 0 <= items[0] < self.n_rows:
-                raise IndexError(f"Row {items[0]} is out of bounds. Max allowed is {self.n_rows - 1}.")
+                raise IndexError("Row {} is out of bounds. Max allowed is {}.".format(items[0], self.n_rows - 1))
             if not 0 <= items[1] < self.n_cols:
-                raise IndexError(f"Column {items[1]} is out of bounds. Max allowed is {self.n_cols - 1}.")
+                raise IndexError("Column {} is out of bounds. Max allowed is {}.".format(items[1], self.n_cols - 1))
             coord = items[0] * self.n_cols + items[1]
         return self._pixels[coord]
 
